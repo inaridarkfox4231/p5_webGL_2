@@ -16,7 +16,7 @@ let fs =
 "uniform vec2 u_mouse;" +
 "uniform float u_time;" +
 // hsbで書かれた(0.0～1.0)の数値vec3をrgbに変換する魔法のコード
-"vec3 hsb2rgb(float r, float g, float b){" +
+"vec3 getHSB(float r, float g, float b){" +
 "    vec3 c = vec3(r, g, b);" +
 "    vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);" +
 "    rgb = rgb * rgb * (3.0 - 2.0 * rgb);" +
@@ -24,7 +24,7 @@ let fs =
 "}" +
 // メインコード
 "void main(void){" +
-"  gl_FragColor = vec4(hsb2rgb(0.55, 0.77, 1.0), 1.0);" +
+"  gl_FragColor = vec4(getHSB(0.55, 0.77, 1.0), 1.0);" +
 "}";
 
 function setup(){
