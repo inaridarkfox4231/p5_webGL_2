@@ -1,4 +1,5 @@
-// hsbをrgbにするコードで遊ぶ
+// というわけで
+// テンプレート
 
 let myShader;
 
@@ -11,8 +12,9 @@ let vs =
 
 let fs =
 "precision mediump float;" +
-"uniform vec2 resolution;" +
-"uniform vec2 mouse;" +
+"uniform vec2 u_resolution;" +
+"uniform vec2 u_mouse;" +
+"uniform float u_time;" +
 // hsbで書かれた(0.0～1.0)の数値vec3をrgbに変換する魔法のコード
 "vec3 hsb2rgb(float r, float g, float b){" +
 "    vec3 c = vec3(r, g, b);" +
@@ -22,19 +24,19 @@ let fs =
 "}" +
 // メインコード
 "void main(void){" +
-"  vec2 p = (gl_FragCoord.xy - resolution.xy) / min(resolution.x, resolution.y);" +
-"  float x = clamp(mouse.x / resolution.x, 0.0, 1.0);" +
-"  gl_FragColor = vec4(hsb2rgb(x, 1.0, 1.0), 1.0);" +
-"}"
+"  gl_FragColor = vec4(hsb2rgb(0.55, 0.77, 1.0), 1.0);" +
+"}";
 
 function setup(){
   createCanvas(400, 400, WEBGL);
   myShader = createShader(vs, fs);
   shader(myShader);
+  noLoop();
 }
 
 function draw(){
-  myShader.setUniform("resolution", [width, height]);
-  myShader.setUniform("mouse", [mouseX, mouseY])
-  quad(-1, -1, 1, -1, 1, 1, -1, 1);
+  myShader.setUniform("u_resolution", [width, height]);
+  myShader.setUniform("u_mouse", [mouseX, mouseY]);
+  myShader.setUniform("u_time", millis() / 1000);
+  quad(-1, -1, -1, 1, 1, 1, 1, -1);
 }
