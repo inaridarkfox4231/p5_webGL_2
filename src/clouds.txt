@@ -1,6 +1,6 @@
 // これ：https://www.shadertoy.com/view/XslGRr
 
-
+無理ですね。
 
 // Created by inigo quilez - iq/2013
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
