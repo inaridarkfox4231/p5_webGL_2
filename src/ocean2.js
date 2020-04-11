@@ -2,7 +2,7 @@
 //https://www.shadertoy.com/view/lt3GWj
 // うまくいかなさそうだけど・・ていうかみんなAleksanderさんのあれ参考にしてるのね。
 
-
+// CAUTION!!!: .jsにして読みやすくしてあるけど実行はできないよ。
 
 
 // A documented, altered, recolored version of "Seascape".
@@ -129,11 +129,13 @@ float noise( in vec2 p ) {
 
 // bteitler: diffuse lighting calculation - could be tweaked to taste
 // lighting
+// diffuseは拡散という意味らしい。
 float diffuse(vec3 n,vec3 l,float p) {
     return pow(dot(n,l) * 0.4 + 0.6,p);
 }
 
 // bteitler: specular lighting calculation - could be tweaked taste
+// specularは鏡面という意味らしい。
 float specular(vec3 n,vec3 l,vec3 e,float s) {
     float nrm = (s + 8.0) / (3.1415 * 8.0);
     return pow(max(dot(reflect(e,n),l),0.0),s) * nrm;
@@ -141,12 +143,14 @@ float specular(vec3 n,vec3 l,vec3 e,float s) {
 
 // bteitler: Generate a smooth sky gradient color based on ray direction's Y value
 // sky
+
+// 方向ベクトル（dir）のy成分に応じて空の色を決める感じ。見ての通りy成分以外は一切見てない。
 vec3 getSkyColor(vec3 e) {
-    e.y = max(e.y,0.0);
+    e.y = max(e.y,0.0); // yが0.0以下の時は0.0として計算する
     vec3 ret;
-    ret.x = pow(1.0-e.y,2.0);
-    ret.y = 1.0-e.y;
-    ret.z = 0.6+(1.0-e.y)*0.4;
+    ret.x = pow(1.0-e.y,2.0); // すべての成分は1以下（ノルム1のベクトル）なので(1-y)^2 を取って・・つまり上の方に行くほど濃くなる感じ
+    ret.y = 1.0-e.y; // こっちは単純に1-yを取って差をつけている
+    ret.z = 0.6+(1.0-e.y)*0.4; // ここで青を表現・・0.6が基本で上の方に行くほど小さくなるようになっている。みたい。
     return ret;
 }
 
@@ -154,6 +158,11 @@ vec3 getSkyColor(vec3 e) {
 // bteitler: TLDR is that this passes a low frequency random terrain through a 2D symmetric wave function that looks like this:
 // http://www.wolframalpha.com/input/?i=%7B1-%7B%7B%7BAbs%5BCos%5B0.16x%5D%5D+%2B+Abs%5BCos%5B0.16x%5D%5D+%28%281.+-+Abs%5BSin%5B0.16x%5D%5D%29+-+Abs%5BCos%5B0.16x%5D%5D%29%7D+*+%7BAbs%5BCos%5B0.16y%5D%5D+%2B+Abs%5BCos%5B0.16y%5D%5D+%28%281.+-+Abs%5BSin%5B0.16y%5D%5D%29+-+Abs%5BCos%5B0.16y%5D%5D%29%7D%7D%5E0.65%7D%7D%5E4+from+-20+to+20
 // The <choppy> parameter affects the wave shape.
+
+// 海面の状態をノイズを使って表現する。これはその基本波のようなもので実際は重ね合わせて使う。(fbmのようなもの)
+// 跳ねる1-|sin(x)|と|cos(x)|を組み合わせて、2次元にして、そのx成分とy成分を掛けて、0.65乗して滑らかにして、
+// それをchoppyしてまた変化させてる（わかりません）。
+
 float sea_octave(vec2 uv, float choppy) {
     // bteitler: Add the smoothed 2D terrain / wave function to the input coordinates
     // which are going to be our X and Z world coordinates.  It may be unclear why we are doing this.
@@ -194,11 +203,15 @@ float sea_octave(vec2 uv, float choppy) {
 
 // bteitler: Compute the distance along Y axis of a point to the surface of the ocean
 // using a low(er) resolution ocean height composition function (less iterations).
+
+// 海面の高さを計算してる。detailedより短いコードになってますね。
+// レイトレで海面上の点を取得するために使ってるのはこっち。
 float map(vec3 p) {
     float freq = SEA_FREQ;
     float amp = SEA_HEIGHT;
     float choppy = SEA_CHOPPY;
     vec2 uv = p.xz; uv.x *= 0.75;
+    // uvは水平座標で横方向は縮めている（どうしてかは知らない）
 
     // bteitler: Compose our wave noise generation ("sea_octave") with different frequencies
     // and offsets to achieve a final height map that looks like an ocean.  Likely lots
@@ -208,10 +221,15 @@ float map(vec3 p) {
     // appears to your left :)
     float d, h = 0.0;
     for(int i = 0; i < ITER_GEOMETRY; i++) {
+
+      // 繰り返し回数は2. detailedでは5に設定されていますね。
+
         // bteitler: start out with our 2D symmetric wave at the current frequency
     	d = sea_octave((uv+SEA_TIME)*freq,choppy);
         // bteitler: stack wave ontop of itself at an offset that varies over time for more height and wave pattern variance
     	//d += sea_octave((uv-SEA_TIME)*freq,choppy);
+
+      // dが海面の変化でampが海面の高さでそれにより変動を算出してhに加算する感じ
 
         h += d * amp; // bteitler: Bump our height by the current wave function
 
@@ -219,19 +237,27 @@ float map(vec3 p) {
         // The scales of the matrix values affect the frequency of the wave at this iteration, but more importantly
         // it is responsible for the realistic assymetry since the domain is shiftly differently.
         // This is likely the most important parameter for wave topology.
+
+      // ツイスト処理。octave_mは行列。要はfbmに似たことをしている。のか？
     	uv *=  octave_m;
 
+      // この辺はfbmぽい。振動数を上げて（2よりはちょっと小さいが）、振幅は減らしている（0.5どころか0.22倍だけど）
         freq *= 1.9; // bteitler: Exponentially increase frequency every iteration (on top of our permutation)
         amp *= 0.22; // bteitler: Lower the amplitude every frequency, since we are adding finer and finer detail
         // bteitler: finally, adjust the choppy parameter which will effect our base 2D sea_octave shape a bit.  This makes
         // the "waves within waves" have different looking shapes, not just frequency and offset
+        // choppyも・・0.2倍して0.8を足してる、つまり0.2に近づくように小さくしているみたいね。
         choppy = mix(choppy,1.0,0.2);
     }
+    // そんな波を重ね合わせて最終的にhを算出して、それをp.yから引くことで海面からの高さとする。
     return p.y - h;
 }
 
 // bteitler: Compute the distance along Y axis of a point to the surface of the ocean
 // using a high(er) resolution ocean height composition function (more iterations).
+
+// より詳しく海面の高さを計算するパート。
+// この計算はgetNormal内で行っている。
 float map_detailed(vec3 p) {
     float freq = SEA_FREQ;
     float amp = SEA_HEIGHT;
@@ -245,6 +271,7 @@ float map_detailed(vec3 p) {
     // which should give you an idea of what is going.  You don't need to graph this function because it
     // appears to your left :)
     float d, h = 0.0;
+    // こっちは5回であっちより大きく設定されてるね
     for(int i = 0; i < ITER_FRAGMENT; i++) {
         // bteitler: start out with our 2D symmetric wave at the current frequency
     	d = sea_octave((uv+SEA_TIME)*freq,choppy);
@@ -258,6 +285,7 @@ float map_detailed(vec3 p) {
         // it is responsible for the realistic assymetry since the domain is shiftly differently.
         // This is likely the most important parameter for wave topology.
     	uv *= octave_m/1.2;
+      // ツイストも弱く設定されてて、なるほど繰り返しが多いからそこら辺考慮してあんま飛び出さないようにしているのね。
 
         freq *= 1.9; // bteitler: Exponentially increase frequency every iteration (on top of our permutation)
         amp *= 0.22; // bteitler: Lower the amplitude every frequency, since we are adding finer and finer detail
@@ -269,11 +297,15 @@ float map_detailed(vec3 p) {
 }
 
 // bteitler:
-// p: point on ocean surface to get color for
-// n: normal on ocean surface at <p>
-// l: light (sun) direction
-// eye: ray direction from camera position for this pixel
-// dist: distance from camera to point <p> on ocean surface
+// p: point on ocean surface to get color for // pは海面上の点のようです
+// n: normal on ocean surface at <p> // nはpでの海面の法線ベクトルのようですね
+// l: light (sun) direction // lは入射光、でいいのかな・・
+// eye: ray direction from camera position for this pixel // eyeはカメラ位置からpに向かうベクトル、要はdirのことかと思われる。
+// dist: distance from camera to point <p> on ocean surface // distはあっちにも出てくるけどoriからpに向かうベクトルでしょうね。
+
+// 海の色の計算。フレネル反射とかいうのを使ってるんだけど・・
+// それ以外にも相当複雑なことやってて手に負えない（（（（
+
 vec3 getSeaColor(vec3 p, vec3 n, vec3 l, vec3 eye, vec3 dist) {
     // bteitler: Fresnel is an exponential that gets bigger when the angle between ocean
     // surface normal and eye ray is smaller
@@ -281,20 +313,27 @@ vec3 getSeaColor(vec3 p, vec3 n, vec3 l, vec3 eye, vec3 dist) {
     fresnel = pow(fresnel,3.0) * 0.45;
 
     // bteitler: Bounce eye ray off ocean towards sky, and get the color of the sky
+    // 反射
+    // getSkyColorとあるから空の色が反射している様子を反映させているのだろうね。空が赤くなったらそれも反映される・・？
     vec3 reflected = getSkyColor(reflect(eye,n))*0.99;
 
     // bteitler: refraction effect based on angle between light surface normal
+    // 屈折
     vec3 refracted = SEA_BASE + diffuse(n,l,80.0) * SEA_WATER_COLOR * 0.27;
 
+    // ここでやってるのはrefracted（屈折）による色とreflected（反射）による色をフレネル値の割合で混ぜ合わせている、と。
     // bteitler: blend the refracted color with the reflected color based on our fresnel term
     vec3 color = mix(refracted,reflected,fresnel);
 
     // bteitler: Apply a distance based attenuation factor which is stronger
     // at peaks
+    // peakにいくほどattenuate（減衰）する効果を付与しているらしい。
     float atten = max(1.0 - dot(dist,dist) * 0.001, 0.0);
     color += SEA_WATER_COLOR * (p.y - SEA_HEIGHT) * 0.15 * atten;
 
     // bteitler: Apply specular highlight
+    // スペキュラーでハイライト（？？）
+    // 若干明るくしている（それしかわからん）
     color += vec3(specular(n,l,eye,90.0))*0.5;
 
     return color;
@@ -305,6 +344,10 @@ vec3 getSeaColor(vec3 p, vec3 n, vec3 l, vec3 eye, vec3 dist) {
 // Takes an argument <eps> (stands for epsilon) which is the resolution to use
 // for the gradient.  See here for more info on gradients: https://en.wikipedia.org/wiki/Gradient
 // tracing
+
+// xzそれぞれの方向に動かして海面の高さを取得してその差でもって法線ベクトルの水平方向成分を
+// 近似的に出している。近似なので、その分海面の高さをより詳細に取得する必要があるわけ。
+// 垂直方向はepsだけど多分同じことを考えている。。多分。で、正規化。
 vec3 getNormal(vec3 p, float eps) {
     // bteitler: Approximate gradient.  An exact gradient would need the "map" / "map_detailed" functions
     // to return x, y, and z, but it only computes height relative to surface along Y axis.  I'm assuming
@@ -337,6 +380,13 @@ float isKeyPressed(float key)
 }
 
 // bteitler: Find out where a ray intersects the current ocean
+// 光線が海面とどこで衝突するかみたいな。出力は？
+
+// 要するにpからどれだけdirの方向に行ったら海面に達するかを区間縮小で求めていて、
+// 最終的にその距離tmidが出力されさらにpはそのときの海面における地点になる。
+// 空の場合はtmidに相当する500.0が返されpは特にいじってないね。
+
+//
 float heightMapTracing(vec3 ori, vec3 dir, out vec3 p) {
     float tm = 0.0;
     float tx = 500.0; // bteitler: a really far distance, this could likely be tweaked a bit as desired
@@ -399,8 +449,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     // to convert to coordinates between 0 and 1
     vec2 uv = fragCoord.xy / iResolution.xy;
 
+    // -1.0～1.0に正規化したうえでなんかやってるけど、
+    // これ要するに縦横の短い方で割ってるのと同じこと。だからまとめて一行で書けるよ。上含めた3行は。
     uv = uv * 2.0 - 1.0; //  bteitler: Shift pixel coordinates from 0 to 1 to between -1 and 1
     uv.x *= iResolution.x / iResolution.y; // bteitler: Aspect ratio correction - if you don't do this your rays will be distorted
+
+    // ここで時間速くしてるね。
     float time = iTime * 2.7; // bteitler: Animation is based on time, but allows you to scrub the animation based on mouse movement
 
     // ray
@@ -408,11 +462,35 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     // bteitler: Calculated a vector that smoothly changes over time in a sinusoidal (wave) pattern.
     // This will be used to drive where the user is looking in world space.
    // vec3 ang = vec3(sin(time*3.0)*0.1,sin(time)*0.2+0.3,time);
+
+   // pitchとyawがマウスの位置によって変化しているみたいなんだけどよくわかんね
+   // わかりました！！！！（バカみたい）
+   // マウスダウン状態でドラッグしないと変化が反映されないようです（単純な話だった）
+   // で、マウスダウンで左右に動かしたらぐるぐるした。これがヨーイングか！！！！
+
+   // たとえばrollをなくすと始点が固定されてそのうえでpitchとyawみたいになる？
+   // rollがまずあってそのうえでpitchとyawみたいなイメージで捉えるのがよさそうね。続きは帰ってから（予定）
+
+   // まずrollはPIになんかリサージュっぽい感じの変化を
+   // まあ基本はPIかな、・・
+   // ていうかね。cosとsinの和を括弧でくくったりくくらなかったりしてるのがなんか気持ち悪いのよね。統一して欲しい。
+   // そういうのどうでもいいっていう人もいるけど（あれとかこれとか）自分は嫌です。
     float roll = PI + sin(iTime)/14.0 + cos(iTime/2.0)/14.0 ;
+
+   // pitchは・・
+   // マウスのyの値が0.8より大きいとpitchが上方修正、0.8より低いと下方修正？？
+   // ここら辺は空しか見えなくならないように角度を調整しているっぽいな。
+   // でもさぁ、やっぱPI基準で値決めた方が分かりやすいと思うんだよな・・自分で書くときに適当に修正しよ。
+
+   // 大きいほど上を向くようになってるからそういうことなんでしょ。
     float pitch = PI*1.021 + (sin(iTime/2.0)+ cos(iTime))/40.0
         + (iMouse.y/iResolution.y - .8)*PI/3.0  ;
+
+  // yawは・・・まあ、fromEuler見た方が早いかな・・わけわからん。
+  // こっちはyと違って完全にxの値に左右されるわけね。0.0から1.0の間のはずだけどね。
+  // 0.0からPI * 4.0まで動くから結構広範囲なのね。
     float yaw = iMouse.x/iResolution.x * PI * 4.0;
-    vec3 ang = vec3(roll,pitch,yaw);
+    vec3 ang = vec3(roll, pitch, yaw);
    // vec3 ang = vec3(roll,pitch,0);
 
     // bteitler: Calculate the "origin" of the camera in world space based on time.  Camera is located
@@ -427,11 +505,17 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 
     // bteitler: Distort the ray a bit for a fish eye effect (if you remove this line, it will remove
     // the fish eye effect and look like a realistic perspective).
+
+    // これをやると凸レンズ？みたいになって水平線がまあるくなる
+    // オリジナルがそんな感じなので多分それを真似しているようです（デフォルトではOFFになっている）
    //  dir.z += length(uv) * 0.15;
 
     // bteitler: Renormalize the ray direction, and then rotate it based on the previously calculated
     // animation angle "ang".  "fromEuler" just calculates a rotation matrix from a vector of angles.
     // if you remove the " * fromEuler(ang)" part, you will disable the camera rotation animation.
+
+    // angから行列を作ってそれによりdirをいじっているんだけどどういうことなんだろう。
+    // そもそもどんな行列ができるのかはfromEulerを解析しないとどうしようもない。
     dir = normalize(dir) * fromEuler(ang);
 
     // tracing
@@ -439,8 +523,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     // bteitler: ray-march to the ocean surface (which can be thought of as a randomly generated height map)
     // and store in p
     vec3 p;
+    // pは何も宣言しない場合vec3(0.0)で初期化されるようになっている（他のベクトルも同様）。それは分かるんだけど他のコードでは意図しない挙動をするから
+    // こういうのは行儀が悪いよね。自分なら絶対やらない。
     heightMapTracing(ori,dir,p);
+    // で、この中でpを決めているんだけど、空に該当する場合pは0のままというわけなんだね。。
 
+    // これpが定まらなかったらどうするんだろ・・ていうか大丈夫なのかこれ
     vec3 dist = p - ori; // bteitler: distance vector to ocean surface for this pixel's ray
 
     // bteitler: Calculate the normal on the ocean surface where we intersected (p), using
@@ -507,17 +595,40 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     // which contains a realistic lighting model.  This is basically doing a fog calculation: weighing more the sky color
     // in the distance in an exponential manner.
 
+    // ----------------- 一番肝心の海の色と空の色を混ぜるところ ------------------ //
+
+    // smoothstepの(0.0, -0.05)とかいう意味不明なことしてる。
+    // smoothstep(0.0, 0.05, -dir.y)で書き換えたら同じ挙動を示したのでそういうことなんでしょう。
+    // これ以上考えたくないので書き換えちゃいましょう。その方が早い。安定しない挙動はすべて排除！排除！
     vec3 color = mix(
         skyColor,
         seaColor,
-    	pow(smoothstep(0.0,-0.05,dir.y), 0.3) // bteitler: Can be thought of as "fog" that gets thicker in the distance
+    	//pow(smoothstep(0.0,-0.05,dir.y), 0.3) // bteitler: Can be thought of as "fog" that gets thicker in the distance
+        pow(smoothstep(0.0, 0.05, -dir.y), 0.3)
     );
+    // ということはdir.yが-0.05と0.0の間の所でスムースに変化して0.0より上の場合はskyColorで0.05より下の場合はseaColorで
+    // はっきり決まるということね。0.3乗しているのは装飾部分でおそらく排除しても大差ない・・・？
+    // と思ったけど排除して1.0にしたら水平線がぼやけちゃった。水平線をくっきりさせるための0.3乗らしい。なるほどねー。
+    // 0.1乗だとくっきりしすぎてギザギザ、これは失敗だね。単純なsmoothstepでうまい具合にならなかったのを試行錯誤で調整して見つけ出したっぽいな。
 
-    // Postprocessing
+    // Postprocessing （事後処理）
+
+    // 事後処理ばっさりカットしてfragColor = vec4(color, 1.0)したらなんか空が青っぽくなった。
+    // 海の色とちがうっぽくなった。
+    // でも海面の様子とかは普通だった。どゆこと？？
+
+    // 今見てきたけどオリジナルの方がシンプルだった（つまりここで終わり）。
+    // その代わりなんか平均みたいなの取ってたけど。
+    // ただでさえ重いこの一連の処理を9回も実行して平均取ってたのよ。そりゃ遅いわ。外したら速くなった。
+    // でもこっちの装飾モリモリでも同じ速さだしどうなってるんだろうね。
 
     // bteitler: Apply an overall image brightness factor as the final color for this pixel.  Can be
     // tweaked artistically.
     fragColor = vec4(pow(color,vec3(0.75)), 1.0);
+
+    // 0.75乗で切ってもやっぱ見た目がなんか違う、でもよくわからんね。
+    // まあこの辺はおいおい理解していくことにしてとりあえずskyColorとseaColorの方にフォーカスしますかね。
+    // あとクリックで視点が変わるのどうしてなのか知りたい。
 
     // CaliCoastReplay:  Adjust hue, saturation, and value adjustment for an even more processed look
     // hsv.x is hue, hsv.y is saturation, and hsv.z is value
@@ -564,3 +675,63 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     //Replace the final color with the adjusted, translated HSV values
     fragColor.xyz = hsv2rgb(hsv);
 }
+
+// ------------- 行列の掛け算や行列の定義について ----------------- //
+// math
+// bteitler: Turn a vector of Euler angles into a rotation matrix
+mat3 fromEuler(vec3 ang) {
+	vec2 a1 = vec2(cos(ang.x), sin(ang.x));
+    vec2 a2 = vec2(cos(ang.y), sin(ang.y));
+    vec2 a3 = vec2(cos(ang.z), sin(ang.z));
+    mat3 m1 = mat3(a1.x, a1.y, 0.0, -a1.y, a1.x, 0.0, 0.0, 0.0, 1.0);
+    m1[0] = vec3(a1.x, a1.y, 0.0);
+	m1[1] = vec3(-a1.y, a1.x, 0.0);
+	m1[2] = vec3(0.0, 0.0, 1.0);
+    mat3 m2;
+    m2[0] = vec3(1.0, 0.0, 0.0);
+	m2[1] = vec3(0.0, a2.x, a2.y);
+	m2[2] = vec3(0.0, -a2.y, a2.x);
+    mat3 m3;
+    m3[0] = vec3(a3.x, 0.0, a3.y);
+	m3[1] = vec3(0.0, 1.0, 0.0);
+	m3[2] = vec3(-a3.y, 0.0, a3.x);
+    // 行列の掛け算でm2 * m1を行った結果。
+    // 挙動がm1 * m2ですね・・逆だ・・・
+    mat3 m;
+    m[0] = vec3(a1.x, a2.x * a1.y, a1.y * a2.y);
+    m[1] = vec3(-a1.y, a2.x * a1.x, a1.x * a2.y);
+    m[2] = vec3(0.0, -a2.y, a2.x);
+    // つまり普通にm1 * m2で行列の掛け算をすると・・？ん？
+	return m3 * m2 * m1;
+}
+// まずeuler * dirに直してみた。
+// m1を掛ける場合にちゃんとあれしてる・・どうもm1[0]は一列目の縦ベクトル？
+// ですね。つまり、上から下、次の列の上から下、次の列の上から下、でOK.
+// 次に、掛け算について・・
+// OK! 行列の掛け算でm2 * m1を計算してできた結果のmを用意して、
+// return のところをm2 * m1とmで比較したら一緒になった。
+// つまり縦ベクトルで行列は表現されていて、0とか1でアクセスしているのは
+// 縦ベクトルなのだね！そして掛け算もその通りになってるみたい。
+// つまりdirを縦ベクトルとみなした場合の計算結果になっている。
+
+// というわけで。
+/*
+まず、行列の定義の仕方。
+mat3 m = mat3(a, b, c, a', b', c', a'', b'', c'');
+これでできるのはこれ：
+  a  a'  a''
+  b  b'  b''
+  c  c'  c''
+なのです。そして、
+m[0] = (a, b, c), m[1] = (a', b', c'), m[2] = (a'', b'', c'')
+という感じ。すべてvec3のベクトルですよと。これを使って定義することも可能。
+次にベクトルとの掛け算について・・
+m * v
+とする場合、上記の表現でのmに縦ベクトルとしてのvを掛けてできる縦ベクトルがそのまま演算結果になるっぽい。
+なので、m1, m2がある場合、行列の掛け算で上記の記法の下でm1 * m2を計算してできるmに対するmvは、
+m * v (= (m1 * m2) * v) = m1 * (m2 * v)
+と一緒になるようなのです。だからm1, m2の順に掛けたかったら行列の掛け算としては(m2 * m1)を実行しないといけないみたいね！
+
+
+
+*/
