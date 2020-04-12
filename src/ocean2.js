@@ -681,27 +681,28 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
 // bteitler: Turn a vector of Euler angles into a rotation matrix
 mat3 fromEuler(vec3 ang) {
 	vec2 a1 = vec2(cos(ang.x), sin(ang.x));
-    vec2 a2 = vec2(cos(ang.y), sin(ang.y));
-    vec2 a3 = vec2(cos(ang.z), sin(ang.z));
-    mat3 m1 = mat3(a1.x, a1.y, 0.0, -a1.y, a1.x, 0.0, 0.0, 0.0, 1.0);
-    m1[0] = vec3(a1.x, a1.y, 0.0);
+  vec2 a2 = vec2(cos(ang.y), sin(ang.y));
+  vec2 a3 = vec2(cos(ang.z), sin(ang.z));
+  // 画面の横揺れ（roll）
+  mat3 m1 = mat3(a1.x, a1.y, 0.0, -a1.y, a1.x, 0.0, 0.0, 0.0, 1.0);
+  m1[0] = vec3(a1.x, a1.y, 0.0);
 	m1[1] = vec3(-a1.y, a1.x, 0.0);
 	m1[2] = vec3(0.0, 0.0, 1.0);
-    mat3 m2;
-    m2[0] = vec3(1.0, 0.0, 0.0);
+  // 縦揺れ（pitch）
+  mat3 m2;
+  m2[0] = vec3(1.0, 0.0, 0.0);
 	m2[1] = vec3(0.0, a2.x, a2.y);
 	m2[2] = vec3(0.0, -a2.y, a2.x);
-    mat3 m3;
-    m3[0] = vec3(a3.x, 0.0, a3.y);
+  // 水平回転（yaw）
+  mat3 m3;
+  m3[0] = vec3(a3.x, 0.0, a3.y);
 	m3[1] = vec3(0.0, 1.0, 0.0);
 	m3[2] = vec3(-a3.y, 0.0, a3.x);
-    // 行列の掛け算でm2 * m1を行った結果。
-    // 挙動がm1 * m2ですね・・逆だ・・・
-    mat3 m;
-    m[0] = vec3(a1.x, a2.x * a1.y, a1.y * a2.y);
-    m[1] = vec3(-a1.y, a2.x * a1.x, a1.x * a2.y);
-    m[2] = vec3(0.0, -a2.y, a2.x);
-    // つまり普通にm1 * m2で行列の掛け算をすると・・？ん？
+  mat3 m;
+  m[0] = vec3(a1.x, a2.x * a1.y, a1.y * a2.y);
+  m[1] = vec3(-a1.y, a2.x * a1.x, a1.x * a2.y);
+  m[2] = vec3(0.0, -a2.y, a2.x);
+  // m1, m2, m3の順に適用される
 	return m3 * m2 * m1;
 }
 // まずeuler * dirに直してみた。
@@ -732,6 +733,6 @@ m * v
 m * v (= (m1 * m2) * v) = m1 * (m2 * v)
 と一緒になるようなのです。だからm1, m2の順に掛けたかったら行列の掛け算としては(m2 * m1)を実行しないといけないみたいね！
 
-
+テスト完了。これでeuler * dirにしたら意図した通りの挙動になった（ただしrollとpitchからPIを引き算している（当然ね））
 
 */
