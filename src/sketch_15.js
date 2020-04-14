@@ -74,6 +74,12 @@ let fs =
 "	 m_yaw[1] = vec3(0.0, 1.0, 0.0);" +
 "	 m_yaw[2] = vec3(-c.y, 0.0, c.x);" +
 // m_roll, m_pitch, m_yawの順に適用される
+// 完成形使ってみる。縦ベクトルにするのを忘れずにね。
+"  mat3 m;" +
+"  m[0] = vec3(a.x * c.x - a.y * b.y * c.y, a.y * b.x, a.x * c.y + a.y * b.y * c.x);" +
+"  m[1] = vec3(-a.y * c.x - a.x * b.y * c.y, a.x * b.x, -a.y * c.y + a.x * b.y * c.x);" +
+"  m[2] = vec3(-b.x * c.y, -b.y, b.x * c.x);" +
+"  return m;" +
 "	 return m_yaw * m_pitch * m_roll;" +
 "}" +
 // バリューノイズの準備、ハッシュ関数
@@ -294,7 +300,8 @@ function setup(){
 
 function draw(){
   myShader.setUniform("u_resolution", [width, height]);
-  myShader.setUniform("u_mouse", [constrain(mouseX, 0, width), constrain(mouseY, 0, height)]);
+  // マウスのyはglslでは逆なので放り込むときは注意しようね！！
+  myShader.setUniform("u_mouse", [constrain(mouseX, 0, width), height - constrain(mouseY, 0, height)]);
   myShader.setUniform("u_time", millis() / 1000);
   myShader.setUniform("night", night);
   quad(-1, -1, -1, 1, 1, 1, 1, -1);
