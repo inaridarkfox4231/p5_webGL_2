@@ -1,20 +1,46 @@
-// また別の海表現
-// https://www.shadertoy.com/view/4dBcRD
+// ocean3の写経してみる。炎とかも気になるけどね。
 
-// 太陽が海に像を作ってたりして完成度高いな・・・
-// これにしよう。これやってみたい。
+// とりあえず#define使えないからなくすわ
 
-// 軸周りの回転を2つ組み合わせてるね。
+let myShader;
 
-//afl_ext 2018
+let vs =
+"precision mediump float;" +
+"attribute vec3 aPosition;" +
+"void main(void){" +
+"  gl_Position = vec4(aPosition, 1.0);" +
+"}";
 
-//afl_ext 2018
+let fs =
+"precision mediump float;" +
+"uniform vec2 u_resolution;" +
+"uniform vec2 u_mouse;" +
+"uniform float u_time;" +
+"void main(void){" +
+"  gl_FragColor = vec4(vec3(0.7), 1.0);" +
+"}";
 
+function setup(){
+  createCanvas(640, 360, WEBGL);
+  myShader = createShader(vs, fs);
+  shader(myShader);
+}
+
+function draw(){
+  myShader.setUniform("u_resolution", [width, height]);
+  let mx = constrain(mouseX, 0, width);
+  let my = height - constrain(mouseY, 0, height);
+  myShader.setUniform("u_mouse", [mx, my]);
+  myShader.setUniform("u_time", millis() / 1000);
+}
+
+// ここは全部定数指定でいいよ・・#defineにしなくてもさ。
 #define DRAG_MULT 0.048
 #define ITERATIONS_RAYMARCH 13
 #define ITERATIONS_NORMAL 48
 #define WATER_DEPTH 2.1
 
+// ここもまあ・・普通のユニフォームだしなぁ。
 #define Mouse (iMouse.xy / iResolution.xy)
 #define Resolution (iResolution.xy)
 #define Time (iTime)
