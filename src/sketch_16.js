@@ -16,6 +16,10 @@ let fs =
 "uniform vec2 u_resolution;" +
 "uniform vec2 u_mouse;" +
 "uniform float u_time;" +
+"const float DRAG_MULT = 0.048;" +
+"const int ITERATIONS_RAYMARCH = 13;" +
+"const int ITERATIONS_NORMAL = 48;" +
+"const float WATER_DEPTH = 2.1;" +
 "void main(void){" +
 "  gl_FragColor = vec4(vec3(0.7), 1.0);" +
 "}";
