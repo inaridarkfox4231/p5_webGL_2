@@ -160,6 +160,12 @@ class LineSlider extends Slider{
     const prg = p5.Vector.dist(this.start, this.cursor.position) / this.length;
     return this.minValue * (1 - prg) + this.maxValue * prg;
   }
+  setValue(newValue){
+		// 値を直接決める（デフォルト値を設定するのに使う）
+		let ratio = (newValue - this.minValue) / (this.maxValue - this.minValue);
+		let cursorPos = p5.Vector.lerp(this.start, this.end, ratio);
+		this.cursor.setPosition(cursorPos.x, cursorPos.y);
+	}
   update(){
     if(!this.active){ return; }
     // マウス位置から垂線を下ろしてratioを割り出す。ratioはconstrainで0以上1以下に落とす。
@@ -282,6 +288,10 @@ class SliderSet{
   initialize(offSetX, offSetY){
     this.every("initialize", [offSetX, offSetY]);
   }
+  setValue(_key, value){
+		// _keyでスライダーを取得してvalueの値をセットする。
+		this.sliderDict[_key].setValue(value);
+	}
   activate(){
     this.every("activate");
   }
