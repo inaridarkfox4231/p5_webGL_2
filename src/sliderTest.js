@@ -292,6 +292,12 @@ class SliderSet{
 		// _keyでスライダーを取得してvalueの値をセットする。
 		this.sliderDict[_key].setValue(value);
 	}
+  setValueMulti(keyArray, valueArray){
+    // まとめて値を設定する感じね。
+    for(let i = 0; i < keyArray.length; i++){
+      this.sliderDict[keyArray[i]].setValue(valueArray[i]);
+    }
+  }
   activate(){
     this.every("activate");
   }
