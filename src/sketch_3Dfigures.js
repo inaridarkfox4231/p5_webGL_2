@@ -27,8 +27,7 @@ let fs =
 "uniform vec2 u_resolution;" +
 "uniform vec2 u_mouse;" +
 "uniform float u_time;" +
-// yawとcameraPosはuniformにして操作可能に
-"uniform float yaw;" +
+// yaw廃止してカメラがぐるぐるするように変更
 "uniform vec2 cameraPos;" +
 "uniform float cameraHeight;" +
 // 円周率
@@ -54,11 +53,10 @@ let fs =
 "  m_yaw[2] = vec3(-sin(yaw), 0.0, cos(yaw));" +
 "  return m_yaw;" +
 "}" +
-// fromEulerの独自修正版。(roll, pitch, yaw)で取得する。
-"mat3 fromEuler(float roll, float pitch, float yaw){" +
+// fromEulerの独自修正版。(roll, pitch)で取得する。
+"mat3 fromEuler(float roll, float pitch){" +
 "  vec2 a = vec2(cos(roll), sin(roll));" +
 "  vec2 b = vec2(cos(pitch), sin(pitch));" +
-"  vec2 c = vec2(cos(yaw), sin(yaw));" +
 // 画面の横揺れ（roll）
 "  mat3 m_roll;" +
 "  m_roll[0] = vec3(a.x, a.y, 0.0);" +
@@ -69,10 +67,8 @@ let fs =
 "  m_pitch[0] = vec3(1.0, 0.0, 0.0);" +
 "  m_pitch[1] = vec3(0.0, b.x, b.y);" +
 "  m_pitch[2] = vec3(0.0, -b.y, b.x);" +
-// 水平回転（yaw）
-"  mat3 m_yaw = get_yaw(yaw);" +
-// m_roll, m_pitch, m_yawの順に適用される
-"  return m_yaw * m_pitch * m_roll;" +
+// yawはとりあえず廃止。
+"  return m_pitch * m_roll;" +
 "}" +
 // 色のライティング処理
 // bltが0.0に近いほど黒っぽく、1.0に近いほど白っぽく。うまくいった。
@@ -321,7 +317,7 @@ let fs =
 "void main(void){" +
 "  vec2 st = (gl_FragCoord.xy - u_resolution.xy) / min(u_resolution.x, u_resolution.y);" +
 "  float time = u_time * 2.7;" + // 実際に使うtime.
-// roll（横揺れ）、pitch（縦揺れ）、yaw（視線方向）を作る
+// roll（横揺れ）、pitch（縦揺れ）を作る。視線方向(yaw)は原点方向で固定。
 "  float phase = time * pi * 0.5;" +
 "  float roll = sin(u_time * pi * 0.5) * pi * 0.05;" +
 "  float pitch = (u_mouse.y / u_resolution.y - 0.5) * pi / 6.0;" +
@@ -331,11 +327,14 @@ let fs =
 // 普通にてっぺんがzの方が分かりやすいかも。
 "  vec3 ori = vec3(cameraPos.y, cameraHeight, cameraPos.x);" +
 // あーー、そうか、これカメラの向きがz軸負方向をデフォとしているのか・・・んー。
-// 原点方向に修正したいなぁ。するべき？
-// あっちさっきいじった、あれでいいんだよ。
-"  vec3 dir = normalize(vec3(st.xy, -depth));" +
+// 原点方向に修正したいなぁ。よし。
+"  vec3 forward = normalize(vec3(-ori.x, 0.0, -ori.z));" +
+"  vec3 top = vec3(0.0, 1.0, 0.0);" +
+"  vec3 side = cross(forward, top);" +
+// 原点方向にdepthだけ進んでから、sideにst.x進んでtopにst.y進む。
+"  vec3 dir = normalize(depth * forward + st.x * side + st.y * top);" +
 // 変換行列で視界をいじってdirに補正を掛ける
-"  dir = fromEuler(roll, pitch, yaw) * normalize(dir);" +
+"  dir = fromEuler(roll, pitch) * normalize(dir);" +
 // まず背景色（床と軸と太陽）を取得。そこに上書きしていく。
 "  vec3 color = getBackground(ori, dir);" +
 // これ以降はcolorとtを一つ組にしたdrawerというのを用意して使い回す。
@@ -383,9 +382,7 @@ function setup(){
 	myCanvas = createGraphics(640, 480, WEBGL);
   myShader = myCanvas.createShader(vs, fs);
   myCanvas.shader(myShader);
-  myCamera = new CameraModule();
-  myCamera.setCameraPos("axis", {x:14.24, y:18.55});
-  myCamera.setDefaultCameraDirection()
+  myCamera = new CameraModule(23.8, Math.PI * 0.42);
 	myConfig = new Config();
 }
 
@@ -407,29 +404,27 @@ function draw(){
 
 // コンストラクタでカメラの位置を指定できるようにしただけ。
 class CameraModule{
-  constructor(){
+  constructor(radius, direction){
     this.cameraPos = createVector();
-    this.yaw = 0.0;
+    //this.yaw = 0.0;
     this.cameraSpeed = 0.3;
-    this.cameraHeight = 3.2;
+    this.cameraHeight = 2.0;
+    this.minRadius = 2.0;
+    this.maxRadius = 40.0;
+    this.minHeight = 2.0;
+    this.maxHeight = 15.0;
+    this.radius = radius;
+    this.direction = direction;
+    this.setCameraPos(radius, direction);
   }
-  setCameraPos(_type, param){
-    switch(_type){
-      case "axis":
-        this.cameraPos.set(param.x, param.y);
-        break;
-      case "pole":
-        this.cameraPos.set(param.r * cos(param.t), param.r * sin(param.t));
-        break;
-    }
-    this.defaultCameraDirection = atan2(this.cameraPos.y, this.cameraPos.x);
+  setCameraPos(radius, direction){
+    // 半径と方向で決める感じ。
+    this.cameraPos.set(radius * cos(direction), radius * sin(direction));
   }
-  setDefaultCameraDirection(){
-    this.defaultCameraDirection = atan2(this.cameraPos.y, this.cameraPos.x);
-  }
-	getCameraPos(){ return this.cameraPos; }
+	getCameraRadius(){ return this.radius; }
+  getCameraDirection(){ return this.direction; }
 	getCameraHeight(){ return this.cameraHeight; }
-	getYaw(){ return this.yaw; }
+	//getYaw(){ return this.yaw; }
 	inCanvas(){
 		// マウスがキャンバス内にあるかどうか調べるだけ
 		if(mouseX < 0 || mouseY < 0){ return false; }
@@ -437,21 +432,27 @@ class CameraModule{
 		return true;
 	}
   update(){
-		// ここにデフォルト値を加えたりしてカメラが・・んー。
-		// なるほど。デフォをいくら変更してもここで決まっちゃう以上どうしようもないわけだ。
-		// デフォルトのyawを原点方向に修正。
-		// カメラの向きのデフォルトがz軸負方向になってて、それをyawでいじる形になってるんだけど、
-    this.yaw = constrain(mouseX / myCanvas.width, 0.0, 1.0) * 4.0 * Math.PI - this.defaultCameraDirection;
-    if(mouseIsPressed && this.inCanvas()){
-      let velocity = createVector(-cos(this.yaw), sin(this.yaw)).mult(this.cameraSpeed);
-      this.cameraPos.add(velocity);
+    if(this.inCanvas()){
+      // マウスの横移動でカメラがy軸を中心に回転
+      this.direction = (constrain(mouseX / myCanvas.width, 0.0, 1.0) * 2.2 - 1.1 + 0.3) * Math.PI;
+      if(mouseIsPressed){
+        if(mouseY > myCanvas.height * 0.5){
+          // 上側でのマウス押し下げによる接近
+          this.radius += this.cameraSpeed;
+        }else{
+          // 下側でマウスを押し下げると離れる感じ。
+          this.radius -= this.cameraSpeed;
+        }
+        // 位置更新
+        this.radius = constrain(this.radius, this.minRadius, this.maxRadius);
+      }
+      this.setCameraPos(this.radius, this.direction);
     }
     if(keyIsDown(UP_ARROW)){ this.cameraHeight += 0.1; }
     else if(keyIsDown(DOWN_ARROW)){ this.cameraHeight -= 0.1; }
-    this.cameraHeight = constrain(this.cameraHeight, 2.0, 12.0);
+    this.cameraHeight = constrain(this.cameraHeight, this.minHeight, this.maxHeight);
   }
   regist(){
-    myShader.setUniform("yaw", this.yaw);
     myShader.setUniform("cameraPos", [this.cameraPos.x, this.cameraPos.y]);
     myShader.setUniform("cameraHeight", this.cameraHeight);
   }
@@ -474,31 +475,32 @@ class Config{
 	}
 	prepareSlider(){
 		this.mySliderSet = new SliderSet();
+    // 背景色変更用スライダー
 		let cur1 = new Cursor("circle", {r:10}, 1.1, color("red"));
-		let sld1 = new LineSlider(0.0, 1.0, cur1, createVector(300, 60), createVector(428, 60));
+		let sld1 = new LineSlider(0.0, 1.0, cur1, createVector(260, 60), createVector(388, 60));
 		let cur2 = new Cursor("circle", {r:10}, 1.1, color("green"));
-		let sld2 = new LineSlider(0.0, 1.0, cur2, createVector(300, 100), createVector(428, 100));
+		let sld2 = new LineSlider(0.0, 1.0, cur2, createVector(260, 100), createVector(388, 100));
 		let cur3 = new Cursor("circle", {r:10}, 1.1, color("blue"));
-		let sld3 = new LineSlider(0.0, 1.0, cur3, createVector(300, 140), createVector(428, 140));
+		let sld3 = new LineSlider(0.0, 1.0, cur3, createVector(260, 140), createVector(388, 140));
 		this.mySliderSet.registMulti(["red", "green", "blue"], [sld1, sld2, sld3]);
 		this.mySliderSet.initialize(this.offSetX, this.offSetY);
 		this.mySliderSet.setValueMulti(["red", "green", "blue"], [0.00, 0.63, 0.91]);
 	}
 	drawText(){
 		let gr = this.board;
-		const {x:z, y:x} = myCamera.getCameraPos();
-		const y = myCamera.getCameraHeight();
 		gr.text("cameraPos", 15, 30);
-	  gr.text("x:" + x.toFixed(2), 15, 55);
-	  gr.text("y:" + y.toFixed(2), 15, 80);
-	  gr.text("z:" + z.toFixed(2), 15, 105);
-	  gr.text("mouseDown:go forward.", 15, 130);
-	  gr.text("up/downKey:change height.", 15, 155);
+    const r = myCamera.getCameraRadius();
+    const angle = floor((myCamera.getCameraDirection() + 2.0 * Math.PI) * 180 / Math.PI) % 360;
+    const h = myCamera.getCameraHeight();
+	  gr.text("radius:" + r.toFixed(2), 15, 55);
+	  gr.text("angle:" + angle + "°", 15, 80);
+	  gr.text("height:" + h.toFixed(2), 15, 105);
+	  gr.text("mouseDown: close/far.", 15, 130);
+	  gr.text("up/downKey: change height.", 15, 155);
 	  // この補正により、きちんとしたカメラ方向の角度になる。
-	  gr.text("cameraDir:" + ((540 - floor(myCamera.getYaw() * 180 / Math.PI)) % 360) + "°", 120, 30);
-		gr.text("skyColor", 300, 30);
-    gr.text("freeze: space key", 460, 30);
-    gr.text("image_save: s key", 460, 55);
+		gr.text("skyColor", 260, 30);
+    gr.text("freeze: space key", 420, 30);
+    gr.text("image_save: s key", 420, 55);
 	}
 	update(){
 	  this.mySliderSet.update();
