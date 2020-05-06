@@ -1,15 +1,4 @@
-// ケイリーグラフ。
-// とりあえず、巡回群でやってみたい。
-// 辺の長さを赤で。それでボールがまず12個、
-// 群の作用で動く。+1で普通に。
-// とどまってるときは灰色で動くときに赤とか青になる。3色なら緑も追加する。
-// 30フレームおきに切り替える。
-// 480x480にして右側のエリアでボタンを用意してそれが意味する置換で球が動くように。
-// 1秒ごとの決定メソッドでどの位置に移動するかをそのボタンが決める感じね。
-// 生成元は順番に赤、青、緑で、その他の3次とか4次の置換はオレンジや紫で。
-// 正12角形の頂点。はい。
-
-// 2面体群では6x2の位数12のものをやる予定だけどどうなるかわかんない。位数24でもいいかもしれない。
+// 2面体群用のコード
 
 const SKETCH_NAME = "template_3D";
 
@@ -27,13 +16,13 @@ let fs =
 "uniform vec2 u_resolution;" +
 "uniform vec2 u_mouse;" +
 "uniform float u_time;" +
-// ケイリーグラフ関連。長さは12で。
-"uniform float vpx[12];" +
-"uniform float vpy[12];" +
-"uniform float vpz[12];" +
-"uniform float upx[12];" +
-"uniform float upy[12];" +
-"uniform float upz[12];" +
+// ケイリーグラフ関連。長さは16.
+"uniform float vpx[16];" +
+"uniform float vpy[16];" +
+"uniform float vpz[16];" +
+"uniform float upx[16];" +
+"uniform float upy[16];" +
+"uniform float upz[16];" +
 "uniform vec3 unitColor;" +
 // yaw廃止してカメラがぐるぐるするように変更
 "uniform vec2 cameraPos;" +
@@ -167,26 +156,49 @@ let fs =
 "  return t_cyl;" +
 "}" +
 // パイプの描画
-// drawCylinderはそのまま使わない。最も小さいtだけを採用する感じ。
-// なお今回はすべてのパイプの色が赤である。
+// 二面体群（位数16）です。
+// 0, 1, ..., 7と8, 9, ..., 15は巡回する8本ずつ赤。0-8, 1-9, 2-10, ..., 7-15を青で引く。合計24本。
 "void drawPipe(out vec4 drawer, vec3 ori, vec3 dir, float r, vec3 c, vec3 e0, vec3 e1, vec3 e2){" +
-"  vec3 p[13];" +
-"  for(int i = 0; i < 12; i++){" +
-"    p[i] = c + r * (vpx[i] * e0 + vpy[i] * e1 + vpz[i] * e2);" +
+"  vec3 pu[9];" + // 上側
+"  vec3 pd[9];" + // 下側
+"  for(int i = 0; i < 8; i++){" +
+"    pu[i] = c + r * (vpx[i] * e0 + vpy[i] * e1 + vpz[i] * e2);" +
+"    pd[i] = c + r * (vpx[i + 8] * e0 + vpy[i + 8] * e1 + vpz[i + 8] * e2);" +
 "  }" +
-"  p[12] = p[0];" + // ループさせておく。
+"  pu[8] = pu[0];" + // ループさせておく。
+"  pd[8] = pd[0];" +
 "  float t = -1.0;" + // 最終的な比較対象としてのt.
 "  vec3 c1, c2;" + // 確定したときに法線取るのに使う。
 "  vec3 pipeColor = vec3(0.0);" + // tが0.0以上になるようならきちんとした色が付くイメージ。
 "  float tmp;" +
-"  for(int i = 0; i < 12; i++){" +
-// まとめて更新して最後に残ったものだけ見る感じ
-"    tmp = getPipe(ori, dir, p[i], p[i + 1], 0.1);" +
+// 先に赤い方を描く。まずは上側
+"  for(int i = 0; i < 8; i++){" +
+"    tmp = getPipe(ori, dir, pu[i], pu[i + 1], 0.1);" +
 "    if(tmp > 0.0 && ((t < 0.0) || (tmp < t))){" +
 "      t = tmp;" +
-"      c1 = p[i];" +
-"      c2 = p[i + 1];" +
-"      pipeColor = vec3(1.0, 0.05, 0.08);" + // 赤
+"      c1 = pu[i];" +
+"      c2 = pu[i + 1];" +
+"      pipeColor = vec3(1.0, 0.0, 0.0);" + // 赤
+"    }" +
+"  }" +
+// 次に下側
+"  for(int i = 0; i < 8; i++){" +
+"    tmp = getPipe(ori, dir, pd[i], pd[i + 1], 0.1);" +
+"    if(tmp > 0.0 && ((t < 0.0) || (tmp < t))){" +
+"      t = tmp;" +
+"      c1 = pd[i];" +
+"      c2 = pd[i + 1];" +
+"      pipeColor = vec3(1.0, 0.0, 0.0);" + // 赤
+"    }" +
+"  }" +
+// それらをつなぐ青いパイプ
+"  for(int i = 0; i < 8; i++){" +
+"    tmp = getPipe(ori, dir, pu[i], pd[i], 0.1);" +
+"    if(tmp > 0.0 && ((t < 0.0) || (tmp < t))){" +
+"      t = tmp;" +
+"      c1 = pu[i];" +
+"      c2 = pd[i];" +
+"      pipeColor = vec3(0.0, 0.0, 1.0);" + // 青
 "    }" +
 "  }" +
 "  if(t < 0.0 || t > drawer.w){ return; }" +
@@ -237,12 +249,10 @@ let fs =
 "  drawPipe(drawer, ori, dir, radius, center, e0, e1, e2);" +
 "  float r = 0.2;" +
 "  vec3 c = vec3(0.0);" +
-"  for(int i = 0; i < 12; i++){" +
+"  for(int i = 0; i < 16; i++){" +
 "    c = center + radius * (upx[i] * e0 + upy[i] * e1 + upz[i] * e2);" +
 "    drawSphere(drawer, ori, dir, c, r, unitColor);" +
 "  }" +
-"  drawSphere(drawer, ori, dir, vec3(0.0, 0.0, 4.0), 0.2, vec3(0.0, 0.0, 1.0));" + // z軸の方に青
-"  drawSphere(drawer, ori, dir, vec3(4.0, 0.0, 0.0), 0.2, vec3(1.0, 0.0, 0.0));" + // x軸の方に赤
 "  gl_FragColor = vec4(drawer.xyz, 1.0);" +
 "}";
 
@@ -253,17 +263,18 @@ let looping = true;
 
 const PALETTE = [[0.3, 0.3, 0.3], [0.92, 0.1, 0.14], [0.24, 0.28, 0.8],
                  [0.3, 0.69, 0.3], [0.0, 0.63, 0.91], [1.0, 0.5, 0.15], [0.64, 0.29, 0.64]]; // 灰色、赤、青、緑、水色、オレンジ、紫、
-let cayley_cyclic; // 巡回群のケーリーグラフ。
+//let cayley_cyclic; // 巡回群のケーリーグラフ。
+let cayley_dihedral;
 
 function setup(){
-  createCanvas(800, 640);
-	myCanvas = createGraphics(480, 480, WEBGL);
+  createCanvas(640, 640);
+	myCanvas = createGraphics(640, 480, WEBGL);
   myShader = myCanvas.createShader(vs, fs);
   myCanvas.shader(myShader);
   myCamera = new CameraModule(12.7, Math.PI * 0.25);
 	myConfig = new Config();
-  let colorIndexArray = [0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
-  cayley_cyclic = new CayleyGraphOfCyclicGroup(colorIndexArray, 12);
+  let colorIndexArray = [0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
+  cayley_dihedral = new CayleyGraphOfDihedralGroup(colorIndexArray, 8);
 }
 
 function draw(){
@@ -274,8 +285,8 @@ function draw(){
   myCamera.update();
   myCamera.regist();
 
-  cayley_cyclic.update();
-  cayley_cyclic.draw();
+  cayley_dihedral.update();
+  cayley_dihedral.draw();
 
   myCanvas.quad(-1, -1, -1, 1, 1, 1, 1, -1);
 	image(myCanvas, 0, 0);
@@ -292,7 +303,7 @@ class CameraModule{
     this.cameraPos = createVector();
     //this.yaw = 0.0;
     this.cameraSpeed = 0.3;
-    this.cameraHeight = 2.0;
+    this.cameraHeight = 5.4;
     this.minRadius = 2.0;
     this.maxRadius = 100.0;
     this.minHeight = 2.0;
@@ -432,6 +443,45 @@ class CyclicGroup extends AbstractGroup{
   }
 }
 
+// 2面体群
+// 行列で表現する。積も掛け算で。
+// 1, a, a^2, ..., a^(n-1), b, ba, ba^2, ..., ba^(n-1). この順にid付ける。
+// 整数使いましょう。Z/nZ ⋊ Z/2Z でいけるでしょ、マイナス1倍で。
+class DihedralGroup extends AbstractGroup{
+  constructor(n){
+    super();
+    this.modulo = n;
+    for(let i = 0; i < n; i++){
+      this.elementArray.push(new ElementOfDihedralGroup(i, n, true));
+    }
+    for(let i = 0; i < n; i++){
+      this.elementArray.push(new ElementOfDihedralGroup(i, n, false));
+    }
+  }
+  calc(elem1, elem2){
+    // dataを取り出して適当に計算
+    let a1 = elem1.data[0];
+    let b1 = elem1.data[1];
+    let a2 = elem2.data[0];
+    let b2 = elem2.data[1];
+    let n = this.modulo;
+    let a = (a1 + (b1 === 0 ? a2 : -a2) + 2 * n) % n; // 0～n-1.
+    let b = (b1 + b2) % 2;
+    // ああそうかインデックスも変えないといけないのか
+    let index;
+    // bが0すなわち上側元の場合にはaがそのままインデックス。
+    // bが1すなわち下側元の場合には0, n-1, n-2, ..., 2, 1を0, 1, 2, ..., n-2, n-1に変換する。
+    // 0の場合だけnを足して、あとはnから引けば一発で出る。お疲れ様～。
+    if(b === 0){
+      index = a;
+    }else{
+      if(a === 0){ a = n; }
+      index = n + (n - a);
+    }
+    return index;
+  }
+}
+
 // 要素
 class Element{
   constructor(){
@@ -444,6 +494,19 @@ class ElementOfCyclicGroup extends Element{
   constructor(i){
     super();
     this.index = i;
+  }
+}
+
+// 二面体群の要素
+// indexでいい。
+// [a, b] x [a', b'] = [a + b(a'), b + b'] で、b(a')はbが単位元ならa'で位数2なら-a'というわけですね。
+// (0, 0), (1, 0), (2, 0), ..., (n-1, 0), (0, 1), (-1, 1), (-2, 1), ..., (-(n-1), 1)が元のすべて。
+// この順なので、配置には若干の工夫を要する。
+class ElementOfDihedralGroup extends Element{
+  constructor(i, n, flag){
+    super();
+    this.data = [(flag ? i : -i), (flag ? 0 : 1)]; // 要は数の組です。
+    this.index = i + n * this.data[1]; // flagに応じて上と下。
   }
 }
 
@@ -465,7 +528,7 @@ class CayleyGraph{
   constructor(colorIndexArray){
     this.size = 1;
     this.properFrameCount = 0;
-    this.span = 45;
+    this.span = 30;
     this.colorIndexArray = colorIndexArray;
   }
   initialize(){
@@ -475,7 +538,9 @@ class CayleyGraph{
     this.registPosition();
     this.registUnitColor(this.colorIndexArray);
     this.prepareUnits();
-    this.setMultiplier(1);
+    this.setMultiplier(1); // 1と2を交互に。
+    this.multiplierList = [1, 1, 1, 8]; // これを順繰りに
+    this.multiplierIndex = 0;
     this.setUnitColor(0);
   }
   registPosition(){
@@ -519,6 +584,12 @@ class CayleyGraph{
       u.setNextPosition(this.positionArray[k]); // 次の行先を設定。
       this.setUnitColor(this.multiplier.index);
     }
+    this.switchMultiplier();
+  }
+  switchMultiplier(){
+    this.multiplierIndex++;
+    if(this.multiplierIndex === this.multiplierList.length){ this.multiplierIndex = 0; }
+    this.setMultiplier(this.multiplierList[this.multiplierIndex]);
   }
   update(){
     for(let u of this.units){
@@ -560,6 +631,7 @@ class CayleyGraph{
 // あとは群に応じてregistPositionの中身や群の生成部分を書き換えるだけ。
 
 // 巡回群のケイリーグラフ。
+// 単純に円です。
 class CayleyGraphOfCyclicGroup extends CayleyGraph{
   constructor(colorIndexArray, n){
     super(colorIndexArray);
@@ -584,6 +656,37 @@ class CayleyGraphOfCyclicGroup extends CayleyGraph{
   }
 }
 
+// 2面体群ではnに対してsizeが2nになり、要素も2n個になる。
+// 0, 1, 2, ..., nの下に、nだけ足したものが真下に来るように配置する。
+// data[0]の絶対値を使うことにする・・それでうまくいく。
+class CayleyGraphOfDihedralGroup extends CayleyGraph{
+  constructor(colorIndexArray, n){
+    super(colorIndexArray);
+    this.size = 2 * n;
+    this.group = new DihedralGroup(n);
+    this.initialize();
+  }
+  registPosition(){
+    // indexと位置を紐付ける処理
+    // 頂点の位置データ。
+    this.vertexPositionX = [];
+    this.vertexPositionY = [];
+    this.vertexPositionZ = [];
+    const n = floor(this.size * 0.5 + 0.5);
+    for(let i = 0; i < 2 * n; i++){
+      const angle = Math.PI * (i < n ? i : i - n) * 2 / n; // 下側は0, 1, 2, ...が並ぶようにする。
+      const x = cos(angle);
+      const y = sin(angle);
+      const z = (i < n ? 0.5 : -0.5); // 上と下で分ける。
+      this.positionArray.push(createVector(x, y, z));
+      // こっちのxyzは向こうではZXYなので注意する
+      this.vertexPositionX.push(y);
+      this.vertexPositionY.push(z);
+      this.vertexPositionZ.push(x);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------------------- //
 // Unit. その位置に対応した群の元の情報を持っていて、左からの掛け算で別の要素の場所に移る。
 
@@ -597,7 +700,7 @@ class Unit{
     this.nextPosition = createVector();
     this.active = false;
     this.properFrameCount = 0;
-    this.span = 30;
+    this.span = 15;
     //this.size = 15;
   }
   activate(){

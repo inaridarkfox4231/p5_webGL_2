@@ -1,0 +1,328 @@
+// なんかすごい、foldで多面体描けるんだって。調べてみたいなーー
+
+// 写経しましょう。
+// https://www.shadertoy.com/view/XlX3zB
+
+#define PI	3.14159265359
+#define PI2	( PI * 2.0 )
+
+#define DISPLAY_FACES true
+#define DISPLAY_SEGMENTS true
+#define DISPLAY_VERTICES true
+
+int Type=3;
+float U=0.,V=0.,W=1.;
+float SRadius=0.03, VRadius=0.07;
+
+vec3 nc,p,pab,pbc,pca;
+void init() {//setup folding planes and vertex
+	float t=iTime;
+    Type=int(fract(0.025*t)*3.)+3;
+    U=0.5*sin(t*1.5)+0.5;
+    V=0.5*sin(t*0.8)+0.5;
+    W=0.5*sin(t*0.3)+0.5;
+    float cospin=cos(PI/float(Type)), scospin=sqrt(0.75-cospin*cospin);
+	nc=vec3(-0.5,-cospin,scospin);//3rd folding plane. The two others are xz and yz planes
+	pab=vec3(0.,0.,1.);
+	pbc=vec3(scospin,0.,0.5);//No normalization in order to have 'barycentric' coordinates work evenly
+	pca=vec3(0.,scospin,cospin);
+	p=normalize((U*pab+V*pbc+W*pca));//U,V and W are the 'barycentric' coordinates (coted barycentric word because I'm not sure if they are really barycentric... have to check)
+	pbc=normalize(pbc);	pca=normalize(pca);//for slightly better DE. In reality it's not necesary to apply normalization :)
+}
+
+vec3 fold(vec3 pos) {
+	for(int i=0;i<5 /*Type*/;i++){
+		pos.xy=abs(pos.xy);//fold about xz and yz planes
+		pos-=2.*min(0.,dot(pos,nc))*nc;//fold about nc plane
+	}
+	return pos;
+}
+
+float D2Planes(vec3 pos) {//distance to the 3 faces
+	pos-=p;
+    float d0=dot(pos,pab);
+	float d1=dot(pos,pbc);
+	float d2=dot(pos,pca);
+	return max(max(d0,d1),d2);
+}
+
+float length2(vec3 p){ return dot(p,p);}
+
+float D2Segments(vec3 pos) {
+	pos-=p;
+	float dla=length2(pos-min(0.,pos.x)*vec3(1.,0.,0.));
+	float dlb=length2(pos-min(0.,pos.y)*vec3(0.,1.,0.));
+	float dlc=length2(pos-min(0.,dot(pos,nc))*nc);
+	return sqrt(min(min(dla,dlb),dlc))-SRadius;
+}
+
+float D2Vertices(vec3 pos) {
+	return length(pos-p)-VRadius;
+}
+
+float Polyhedron(vec3 pos) {
+	pos=fold(pos);
+	float d=10000.;
+	if(DISPLAY_FACES) d=min(d,D2Planes(pos));
+	if(DISPLAY_SEGMENTS) d=min(d,D2Segments(pos));
+	if(DISPLAY_VERTICES)  d=min(d,D2Vertices(pos));
+	return d;
+}
+
+vec3 getColor(vec3 pos){//Not optimized.
+#define Face0Color vec3(.8,0.6,0.);
+#define Face1Color vec3(0.3,0.7,0.2);
+#define Face2Color vec3(0.1,0.4,1.);
+#define SegmentsColor vec3(0.4,0.4,0.7);
+#define VerticesColor vec3(1.,.4,.3);
+	pos=fold(pos);
+	float d0=1000.0,d1=1000.0,d2=1000.,df=1000.,dv=1000.,ds=1000.;
+	if(DISPLAY_FACES){
+		d0=dot(pos-p,pab);
+		d1=dot(pos-p,pbc);
+		d2=dot(pos-p,pca);
+		df=max(max(d0,d1),d2);
+	}
+	if(DISPLAY_SEGMENTS) ds=D2Segments(pos);
+	if(DISPLAY_VERTICES) dv=D2Vertices(pos);
+	float d=min(df,min(ds,dv));
+	vec3 col=Face0Color;
+	if(d==df){
+		if(d==d1) col=Face1Color;
+		if(d==d2) col=Face2Color;
+	}else{
+		if(d==ds) col=SegmentsColor;
+		if(d==dv) col=VerticesColor;
+	}
+	return col;
+}
+//-------------------------------------------------
+//From https://www.shadertoy.com/view/XtXGRS#
+vec2 rotate(in vec2 p, in float t)
+{
+	return p * cos(-t) + vec2(p.y, -p.x) * sin(-t);
+}
+
+float map(in vec3 p)
+{
+    //return length(p)-1.;
+	return mix(length(p)-1.,Polyhedron(p),0.8);//just for fun
+}
+
+vec3 calcNormal(in vec3 p)
+{
+	const vec2 e = vec2(0.0001, 0.0);
+	return normalize(vec3(
+		map(p + e.xyy) - map(p - e.xyy),
+		map(p + e.yxy) - map(p - e.yxy),
+		map(p + e.yyx) - map(p - e.yyx)));
+}
+
+float march(in vec3 ro, in vec3 rd)
+{
+	const float maxd = 5.0;
+	const float precis = 0.001;
+    float h = precis * 2.0;
+    float t = 0.0;
+	float res = -1.0;
+    for(int i = 0; i < 64; i++)
+    {
+        if(h < precis || t > maxd) break;
+	    h = map(ro + rd * t);
+        t += h;
+    }
+    if(t < maxd) res = t;
+    return res;
+}
+
+vec3 transform(in vec3 p)
+{
+    p.yz = rotate(p.yz, iTime * 0.2 + (iMouse.y-0.5*iResolution.y)*PI2/360.);
+    p.zx = rotate(p.zx, iTime * 0.125 + (0.5*iResolution.x-iMouse.x)*PI2/360.);
+    return p;
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+	vec2 p = (2.0 * fragCoord.xy - iResolution.xy) / iResolution.y;
+	vec3 col = vec3(0.3 + p.y * 0.1);
+   	vec3 rd = normalize(vec3(p, -1.8));
+	vec3 ro = vec3(0.0, 0.0, 2.5);
+    vec3 li = normalize(vec3(0.5, 0.8, 3.0));
+    ro = transform(ro);
+	rd = transform(rd);
+	li = transform(li);
+    init();
+    float t = march(ro, rd);
+    if(t > -0.001)
+    {
+        vec3 pos = ro + t * rd;
+        vec3 n = calcNormal(pos);
+		float dif = clamp(dot(n, li), 0.0, 1.0);
+        col = getColor(pos) * dif;
+        col = pow(col, vec3(0.8));
+	}
+   	fragColor = vec4(col, 1.0);
+}
+
+// こちらも。
+// ・・・あの、別に真剣にやらなくていいと思う。そんな暇ないし。
+
+// https://www.shadertoy.com/view/lljBRh
+// イコサのなんかすごいの
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Created by Matthew Arcus, 2017.
+//
+// Uses parts of knighty's polyhedron shader: https://www.shadertoy.com/view/XlX3zB,
+// particularly the raymarching code & some of the geometry.
+//
+// Display one set of the chiral f1 cells in the stellation of the icosahedron.
+// Each set of cells can be generated by the intersection of certain planes
+// of the icosahedron with the fundamental region. Since the f1 cells are
+// chiral, we need to keep track of the number of mirror flips when folding
+// and the final DE has to take into account the parity - for odd parity, use
+// distance when position reflected into the neighbouring cells.
+//
+// All the other cell sets of the icosahedron are achiral and are easier
+// to generate (see forthcoming shader).
+//
+////////////////////////////////////////////////////////////////////////////////
+
+bool achiral = false; // Show both chiral forms
+
+const float scale = 2.0;
+const vec3 color0 = vec3(0.7,0.7,0.1);
+const vec3 color1 = vec3(0.1,0.1,0.1);
+
+// Setup folding planes and vertex
+const float PI	= 3.1415927;
+const int M = 3, N = 5;
+const float A = cos(PI/float(N));
+const float B = cos(PI/float(M));
+const float C = sqrt(1.0 - A*A - B*B);
+const vec3 R = vec3(-A,-B,C); // 3rd folding plane. The two others are xz and yz planes
+const vec3 plane0 = vec3(-0.5774, 0.5774, 0.5774);
+const vec3 plane1 = vec3(0, 0.9342, 0.3568);
+const vec3 plane2 = vec3(0.5774, -0.5774, 0.5774);
+const vec3 plane3 = vec3(-0.5774, -0.5774, 0.5774);
+
+vec3 refla(vec3 p) { return vec3(-p.x,p.y,p.z); }
+vec3 reflb(vec3 p) { return vec3(p.x,-p.y,p.z); }
+vec3 reflc(vec3 p) { return p - 2.0*dot(p,R)*R; } //fold about R plane
+
+// Return the parity of the number of mirror flips
+int fold(inout vec3 pos) {
+  int flips = 0;
+  for (int i = 0; i < 5; i++) {
+    flips += int(pos.x < 0.0); // I hope this is branchless
+    pos.x = abs(pos.x);
+    flips += int(pos.y < 0.0);
+    pos.y = abs(pos.y);
+    float k = dot(pos,R);
+    flips += int(k < 0.0);
+    pos -= 2.0*min(0.0,k)*R; //fold about R plane
+  }
+  return flips-flips/2*2; // For version < 3.00
+}
+
+float f1a(vec3 pos) {
+  float d = -(dot(pos,plane0) - 1.0);
+  d = max(d,dot(pos,plane1) - 1.0);
+  d = max(d,-(dot(pos,plane2) - 1.0));
+  d = max(d,dot(pos,plane3) - 1.0);
+  return d;
+}
+
+float f1(vec3 pos, int parity) {
+  if (parity == 0 || achiral) return f1a(pos);
+  float d = f1a(refla(pos));
+  d = min(d,f1a(reflb(pos)));
+  d = min(d,f1a(reflc(pos)));
+  return d;
+}
+
+float poly(vec3 pos) {
+  pos *= scale;
+  int parity = fold(pos);
+  return f1(pos,parity)/scale;
+}
+
+vec3 getcolor(vec3 pos) {
+  pos *= scale;
+  int parity = fold(pos);
+  return (achiral && parity == 1) ? color1 : color0;
+}
+
+//-------------------------------------------------
+//From https://www.shadertoy.com/view/XtXGRS#
+vec2 rotate(in vec2 p, in float t) {
+  return p * cos(-t) + vec2(p.y, -p.x) * sin(-t);
+}
+
+vec3 calcNormal(in vec3 p) {
+  const vec2 e = vec2(0.0001, 0.0);
+  return normalize(vec3(poly(p + e.xyy) - poly(p - e.xyy),
+                        poly(p + e.yxy) - poly(p - e.yxy),
+                        poly(p + e.yyx) - poly(p - e.yyx)));
+}
+
+float march(in vec3 ro, in vec3 rd) {
+  const float maxd = 4.0;
+  const float precis = 0.0001;
+  float h = precis * 2.0;
+  float t = 0.0;
+  float res = -1.0;
+  for (int i = 0; i < 100; i++) {
+      if (h < precis || t > maxd) break;
+      h = poly(ro + rd * t);
+      t += h;
+    }
+  if (t < maxd) res = t;
+  return res;
+}
+
+vec3 transform(in vec3 p) {
+  if (iMouse.x > 0.0) {
+    float theta = -(2.0*iMouse.y-iResolution.y)/iResolution.y*PI;
+    float phi = -(2.0*iMouse.x-iResolution.x)/iResolution.x*PI;
+    p.yz = rotate(p.yz,theta);
+    p.zx = rotate(p.zx,phi);
+  }
+  p.yz = rotate(p.yz,iTime * 0.125);
+  p.zx = rotate(p.zx,iTime * 0.2);
+  return p;
+}
+
+const int CHAR_A = 65;
+bool keypress(int code) {
+#if __VERSION__ < 300
+  return false;
+#else
+  return texelFetch(iChannel0, ivec2(code,2),0).x != 0.0;
+#endif
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+  achiral = keypress(CHAR_A);
+  vec2 p = 2.0*fragCoord.xy / iResolution.xy - 1.0;
+  p *= 3.0*vec2(1,-1)*iResolution.xy/iResolution.y;
+  vec3 col = vec3(0.3 + p.y * 0.1);
+  vec3 ro = vec3(0.0, 0.0, 2.5);
+  vec3 rd = normalize(vec3(p, -6.0));
+  vec3 li = normalize(vec3(0.5, 0.8, 3.0));
+  ro = transform(ro);
+  rd = transform(rd);
+  li = transform(li);
+  float t = march(ro,rd);
+  if (t > 0.001) {
+    vec3 pos = ro + t * rd;
+    vec3 n = calcNormal(pos);
+    col = getcolor(pos);
+    float diffuse = clamp(dot(n, li), 0.0, 1.0);
+    col *= diffuse;
+    col = pow(col, vec3(0.4545));
+  }
+  fragColor = vec4(col, 1.0);
+}
