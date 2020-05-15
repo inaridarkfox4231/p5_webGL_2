@@ -254,19 +254,29 @@ class ButtonSet{
 }
 
 // 一度にひとつのボタンしかアクティブにならないボタンセット
+// なので、具体的な値を取得できるように改良する。
 class UniqueButtonSet extends ButtonSet{
 	constructor(initialActiveButtonId = 0){
 		super();
 		this.activeButtonId = initialActiveButtonId;  // 最初にアクティブになっているボタンのid（デフォは0）
+    this.buttonValueDict = [];
 	}
 	initialize(offSetX, offSetY){
 		super.initialize(offSetX, offSetY);
 		this.buttons[this.activeButtonId].activate();
 	}
+  setValue(valueArray){
+    // 値を設定する感じ
+    this.buttonValueDict = valueArray;
+  }
 	getActiveButtonId(){
 		// activeなボタンのidは一意なのでそれを返す。
 		return this.activeButtonId;
 	}
+  getValue(){
+    // 具体的な値が欲しい場合はこっち
+    return this.buttonValueDict[this.activeButtonId];
+  }
 	activate(){
     // クリック位置がボタンにヒットする場合に、それをactivateして、それ以外をinActivateする感じ。
 		const targetButtonId = this.getTargetButtonId();
